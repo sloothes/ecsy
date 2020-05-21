@@ -194,30 +194,6 @@ function queryKey(Components) {
   return names.sort().join("-");
 }
 
-let _lut = [];
-
-for (let i = 0; i < 256; i++) {
-  _lut[i] = (i < 16 ? "0" : "") + i.toString(16);
-}
-
-// https://github.com/mrdoob/three.js/blob/dev/src/math/MathUtils.js#L21
-// prettier-ignore
-function generateUUID() {
-  // http://stackoverflow.com/questions/105034/how-to-create-a-guid-uuid-in-javascript/21963136#21963136
-
-  let d0 = Math.random() * 0xffffffff | 0;
-  let d1 = Math.random() * 0xffffffff | 0;
-  let d2 = Math.random() * 0xffffffff | 0;
-  let d3 = Math.random() * 0xffffffff | 0;
-  let uuid = _lut[ d0 & 0xff ] + _lut[ d0 >> 8 & 0xff ] + _lut[ d0 >> 16 & 0xff ] + _lut[ d0 >> 24 & 0xff ] + '-' +
-    _lut[ d1 & 0xff ] + _lut[ d1 >> 8 & 0xff ] + '-' + _lut[ d1 >> 16 & 0x0f | 0x40 ] + _lut[ d1 >> 24 & 0xff ] + '-' +
-    _lut[ d2 & 0x3f | 0x80 ] + _lut[ d2 >> 8 & 0xff ] + '-' + _lut[ d2 >> 16 & 0xff ] + _lut[ d2 >> 24 & 0xff ] +
-    _lut[ d3 & 0xff ] + _lut[ d3 >> 8 & 0xff ] + _lut[ d3 >> 16 & 0xff ] + _lut[ d3 >> 24 & 0xff ];
-
-  // .toUpperCase() here flattens concatenated strings to save heap memory space.
-  return uuid.toUpperCase();
-}
-
 class Query {
   /**
    * @param {Array(Component)} Components List of types of components to query
@@ -354,7 +330,7 @@ class Entity {
     this.world = world;
 
     // Unique ID for this entity
-    this.uuid = generateUUID();
+    this._id = this.world.nextEntityId++;
 
     // List of components types the entity has
     this.componentTypes = [];
@@ -370,9 +346,13 @@ class Entity {
     // Used for deferred removal
     this._componentTypesToRemove = [];
 
-    this.alive = false;
+    this._alive = false;
 
     this._numSystemStateComponents = 0;
+  }
+
+  get alive() {
+    return this._alive;
   }
 
   // COMPONENTS
@@ -406,7 +386,7 @@ class Entity {
   getMutableComponent(Component) {
     var component = this.components[Component.name];
 
-    if (this.alive) {
+    if (this._alive) {
       for (var i = 0; i < this.queries.length; i++) {
         var query = this.queries[i];
         // @todo accelerate this check. Maybe having query._Components as an object
@@ -421,6 +401,26 @@ class Entity {
     }
 
     return component;
+  }
+
+  attachComponent(component) {
+    const Component = component.constructor;
+
+    if (~this.componentTypes.indexOf(Component)) return;
+
+    this.componentTypes.push(Component);
+
+    if (Component.isSystemStateComponent) {
+      this._numSystemStateComponents++;
+    }
+
+    this.components[Component.name] = component;
+
+    if (this._alive) {
+      this.world.onComponentAdded(this, Component);
+    }
+
+    return this;
   }
 
   addComponent(Component, props) {
@@ -445,7 +445,7 @@ class Entity {
 
     this.components[Component.name] = component;
 
-    if (this.alive) {
+    if (this._alive) {
       this.world.onComponentAdded(this, Component);
     }
 
@@ -487,7 +487,7 @@ class Entity {
       const index = this.componentTypes.indexOf(Component);
       this.componentTypes.splice(index, 1);
 
-      if (this.alive) {
+      if (this._alive) {
         this.world.onRemoveComponent(this, Component);
       }
     }
@@ -505,7 +505,7 @@ class Entity {
           this._componentTypesToRemove.splice(index, 1);
         }
       }
-    } else if (this.alive) {
+    } else if (this._alive) {
       this._componentTypesToRemove.push(Component);
       this._componentsToRemove[componentName] = component;
       this.world.queueComponentRemoval(this, Component);
@@ -515,7 +515,7 @@ class Entity {
       this._numSystemStateComponents--;
 
       // Check if the entity was a ghost waiting for the last system state component to be removed
-      if (this._numSystemStateComponents === 0 && !this.alive) {
+      if (this._numSystemStateComponents === 0 && !this._alive) {
         this.dispose();
       }
     }
@@ -530,6 +530,7 @@ class Entity {
     }
   }
 
+  // TODO: Optimize this
   removeAllComponents(immediately) {
     let Components = this.componentTypes;
 
@@ -554,38 +555,22 @@ class Entity {
   }
 
   dispose(immediately) {
-    if (this.alive) {
-      this.world.onDisposeEntity(this);
+    if (this._alive) {
+      this.removeAllComponents(immediately);
+      this.queries.length = 0;
     }
 
+    this._alive = false;
+
     if (immediately) {
-      this.uuid = generateUUID();
-      this.alive = true;
+      this._id = this.world.nextEntityId++;
 
-      for (let i = 0; i < this.queries.length; i++) {
-        this.queries[i].removeEntity(this);
-      }
-
-      for (const componentName in this.components) {
-        this.components[componentName].dispose();
-        delete this.components[componentName];
-      }
-
-      for (const componentName in this._componentsToRemove) {
-        delete this._componentsToRemove[componentName];
-      }
-
-      this.queries.length = 0;
-      this.componentTypes.length = 0;
-      this._componentTypesToRemove.length = 0;
+      this.world.onEntityDisposed(this);
 
       if (this._pool) {
         this._pool.release(this);
       }
-
-      this.world.onEntityDisposed(this);
     } else {
-      this.alive = false;
       this.world.queueEntityDisposal(this);
     }
   }
@@ -648,7 +633,8 @@ class World {
     this.entityPool = new ObjectPool(new Entity(this));
 
     this.entities = [];
-    this.entitiesByUUID = {};
+    this.entitiesById = {};
+    this.nextEntityId = 0;
 
     this.entitiesWithComponentsToRemove = [];
     this.entitiesToRemove = [];
@@ -680,6 +666,46 @@ class World {
       return this;
     }
 
+    const schema = Component.schema;
+
+    if (!schema) {
+      throw new Error(`Component "${Component.name}" has no schema property.`);
+    }
+
+    for (const propName in schema) {
+      const prop = schema[propName];
+
+      if (!prop.type) {
+        throw new Error(
+          `Invalid schema for component "${Component.name}". Missing type for "${propName}" property.`
+        );
+      }
+
+      if (!prop.type.name) {
+        console.warn(
+          `Schema for component "${Component.name}" has property "${propName}" which uses a type with no name.`
+        );
+      }
+
+      if (!prop.type.hasOwnProperty("default")) {
+        throw new Error(
+          `Invalid schema for component "${Component.name}". "${propName}" uses type "${prop.type.name}" with no default value.`
+        );
+      }
+
+      if (!prop.type.clone) {
+        throw new Error(
+          `Invalid schema for component "${Component.name}". "${propName}" uses type "${prop.type.name}" with no clone method.`
+        );
+      }
+
+      if (!prop.type.copy) {
+        throw new Error(
+          `Invalid schema for component "${Component.name}". "${propName}" uses type "${prop.type.name}" with no copy method.`
+        );
+      }
+    }
+
     this.componentTypes[Component.name] = Component;
     this.componentCounts[Component.name] = 0;
 
@@ -709,14 +735,14 @@ class World {
   }
 
   addEntity(entity) {
-    if (this.entitiesByUUID[entity.uuid]) {
-      console.warn(`Entity ${entity.uuid} already added.`);
+    if (this.entitiesById[entity._id]) {
+      console.warn(`Entity ${entity._id} already added.`);
       return entity;
     }
 
-    this.entitiesByUUID[entity.uuid] = entity;
+    this.entitiesById[entity._id] = entity;
     this.entities.push(entity);
-    entity.alive = true;
+    entity._alive = true;
 
     for (let i = 0; i < entity.componentTypes.length; i++) {
       const Component = entity.componentTypes[i];
@@ -726,8 +752,12 @@ class World {
     return entity;
   }
 
-  getEntityByUUID(uuid) {
-    return this.entitiesByUUID[uuid];
+  findEntityByName(name) {
+    return this.entities.find(e => e.name === name);
+  }
+
+  getEntitiesByName(name) {
+    return this.entities.filter(e => e.name === name);
   }
 
   createComponent(Component) {
@@ -849,22 +879,12 @@ class World {
     this.entitiesToRemove.push(entity);
   }
 
-  onDisposeEntity(entity) {
-    for (var queryName in this.queries) {
-      const query = this.queries[queryName];
-
-      if (entity.queries.indexOf(query) !== -1) {
-        query.removeEntity(entity);
-      }
-    }
-  }
-
   onEntityDisposed(entity) {
-    if (!this.entitiesByUUID[entity.uuid]) {
+    if (!this.entitiesById[entity._id]) {
       return;
     }
 
-    delete this.entitiesByUUID[entity.uuid];
+    delete this.entitiesById[entity._id];
 
     const index = this.entities.indexOf(entity);
 
@@ -944,6 +964,8 @@ class World {
 }
 
 class System {
+  // TODO: displayName?
+
   canExecute() {
     if (this._mandatoryQueries.length === 0) return true;
 
@@ -1143,6 +1165,7 @@ function Not(Component) {
 // TODO: The default clone and copy can be made faster by
 // generating clone/copy functions at Component registration time
 class Component {
+  // TODO: displayName?
   constructor(props) {
     const schema = this.constructor.schema;
 
@@ -1235,19 +1258,31 @@ const copyCopyable = (src, dest, key) => dest[key].copy(src[key]);
 
 const cloneClonable = src => src.clone();
 
-const createType = (defaultValue, clone, copy) => ({
+const createType = (name, defaultValue, clone, copy) => ({
+  name,
   default: defaultValue,
   clone,
   copy
 });
 
+// TODO: Add names
 const PropTypes = {
-  Number: { default: 0, clone: cloneValue, copy: copyValue },
-  Boolean: { default: false, clone: cloneValue, copy: copyValue },
-  String: { default: "", clone: cloneValue, copy: copyValue },
-  Object: { default: undefined, clone: cloneValue, copy: copyValue },
-  Array: { default: [], clone: cloneArray, copy: copyArray },
-  JSON: { default: null, clone: cloneJSON, copy: copyJSON }
+  Number: { name: "Number", default: 0, clone: cloneValue, copy: copyValue },
+  Boolean: {
+    name: "Boolean",
+    default: false,
+    clone: cloneValue,
+    copy: copyValue
+  },
+  String: { name: "String", default: "", clone: cloneValue, copy: copyValue },
+  Object: {
+    name: "Object",
+    default: undefined,
+    clone: cloneValue,
+    copy: copyValue
+  },
+  Array: { name: "Array", default: [], clone: cloneArray, copy: copyArray },
+  JSON: { name: "JSON", default: null, clone: cloneJSON, copy: copyJSON },
 };
 
 function generateId(length) {
