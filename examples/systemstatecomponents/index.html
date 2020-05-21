@@ -47,14 +47,14 @@
             var memPosition = Math.floor(Math.random() * 1000);
             var size = Math.floor(Math.random() * 900) + 100;
 
-            log(`Added SpriteResources component: 'memory position: ${memPosition}, size: ${size}kb' to entity id=${entity.uuid}`);
+            log(`Added SpriteResources component: 'memory position: ${memPosition}, size: ${size}kb' to entity id=${entity._id}`);
             entity.addComponent(SpriteResources, {memPosition, size});
           });
 
           this.queries.removed.results.forEach(entity => {
             var resources = entity.getComponent(SpriteResources);
             log(`Freeing SpriteResources 'memory position: ${resources.memPosition}, size: ${resources.size}kb'`);
-            log(`Removing SpriteResources component from entity id=${entity.uuid}`);
+            log(`Removing SpriteResources component from entity id=${entity._id}`);
             entity.removeComponent(SpriteResources);
           });
         }
@@ -76,34 +76,34 @@
       // HTML Code to interact with the world
       document.getElementById('createEntity').addEventListener('click', () => {
         var entity = world.createEntity();
-        log(`> Created entity, (id = ${entity.uuid})`);
+        log(`> Created entity, (id = ${entity._id})`);
       });
 
       document.getElementById('addSprite').addEventListener('click', () => {
         var entity = randomEntity();
         if (!entity) return;
-        log(`> Adding sprite to entity id=${entity.uuid}`);
+        log(`> Adding sprite to entity id=${entity._id}`);
         entity.addComponent(Sprite);
       });
 
       document.getElementById('removeSprite').addEventListener('click', () => {
         var entity = randomEntity();
         if (!entity) return;
-        log(`> Removing sprite '${entity.getComponent(Sprite).name}' from entity id=${entity.uuid}`);
+        log(`> Removing sprite '${entity.getComponent(Sprite).name}' from entity id=${entity._id}`);
         entity.removeComponent(Sprite);
       });
 
       document.getElementById('removeSpriteResources').addEventListener('click', () => {
         var entity = randomEntity();
         if (!entity) return;
-        log(`> Removing SpriteResources component from entity id=${entity.uuid}`);
+        log(`> Removing SpriteResources component from entity id=${entity._id}`);
         entity.removeComponent(SpriteResources);
       });
 
       document.getElementById('removeEntity').addEventListener('click', () => {
         var entity = randomEntity();
         if (!entity) return;
-        log(`> Removing entity id=${entity.uuid}`);
+        log(`> Removing entity id=${entity._id}`);
         entity.dispose();
       });
 

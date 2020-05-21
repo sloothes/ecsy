@@ -1,6 +1,8 @@
 import Query from "./Query.js";
 
 export class System {
+  // TODO: displayName?
+
   canExecute() {
     if (this._mandatoryQueries.length === 0) return true;
 

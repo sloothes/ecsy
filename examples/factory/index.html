@@ -50,7 +50,7 @@
         execute() {
           this.queries.entities.results.forEach(entity => {
             var name = randomFromArray(names);
-            log(`Added name '${name}' to player id=${entity.uuid}`);
+            log(`Added name '${name}' to player id=${entity._id}`);
             entity.addComponent(Name, {value: name});
           });
         }
@@ -65,7 +65,7 @@
           this.queries.entities.results.forEach(entity => {
             var size = randomFromArray(sizes);
             var color = randomFromArray(colors);
-            log(`Added '${color}' '${size}' tshirt to player id=${entity.uuid}`);
+            log(`Added '${color}' '${size}' tshirt to player id=${entity._id}`);
             entity.addComponent(Tshirt, {color: color, size: size});
           });
         }
@@ -90,13 +90,13 @@
       document.getElementById('createNPC').addEventListener('click', () => {
         var npc = world.createEntity();
         npc.addComponent(NPC);
-        log(`> Created NPC, (id = ${npc.uuid})`);
+        log(`> Created NPC, (id = ${npc._id})`);
       });
 
       document.getElementById('removeName').addEventListener('click', () => {
         var entity = randomEntity();
         if (!entity) return;
-        log(`> Removing name '${entity.getComponent(Name).value}' from player id=${entity.uuid}`);
+        log(`> Removing name '${entity.getComponent(Name).value}' from player id=${entity._id}`);
         entity.removeComponent(Name);
       });
 
@@ -104,7 +104,7 @@
         var entity = randomEntity();
         if (!entity) return;
         var tshirt = entity.getComponent(Tshirt);
-        log(`> Removing '${tshirt.color}' '${tshirt.size}' from player id=${entity.uuid}`);
+        log(`> Removing '${tshirt.color}' '${tshirt.size}' from player id=${entity._id}`);
         entity.removeComponent(Tshirt);
       });
 

@@ -1,6 +1,5 @@
 import Query from "./Query.js";
 import { wrapImmutableComponent } from "./WrapImmutableComponent.js";
-import { generateUUID } from "./Utils";
 
 // @todo Take this out from there or use ENV
 const DEBUG = false;
@@ -10,7 +9,7 @@ export class Entity {
     this.world = world;
 
     // Unique ID for this entity
-    this.uuid = generateUUID();
+    this._id = this.world.nextEntityId++;
 
     // List of components types the entity has
     this.componentTypes = [];
@@ -26,9 +25,13 @@ export class Entity {
     // Used for deferred removal
     this._componentTypesToRemove = [];
 
-    this.alive = false;
+    this._alive = false;
 
     this._numSystemStateComponents = 0;
+  }
+
+  get alive() {
+    return this._alive;
   }
 
   // COMPONENTS
@@ -62,7 +65,7 @@ export class Entity {
   getMutableComponent(Component) {
     var component = this.components[Component.name];
 
-    if (this.alive) {
+    if (this._alive) {
       for (var i = 0; i < this.queries.length; i++) {
         var query = this.queries[i];
         // @todo accelerate this check. Maybe having query._Components as an object
@@ -77,6 +80,26 @@ export class Entity {
     }
 
     return component;
+  }
+
+  attachComponent(component) {
+    const Component = component.constructor;
+
+    if (~this.componentTypes.indexOf(Component)) return;
+
+    this.componentTypes.push(Component);
+
+    if (Component.isSystemStateComponent) {
+      this._numSystemStateComponents++;
+    }
+
+    this.components[Component.name] = component;
+
+    if (this._alive) {
+      this.world.onComponentAdded(this, Component);
+    }
+
+    return this;
   }
 
   addComponent(Component, props) {
@@ -101,7 +124,7 @@ export class Entity {
 
     this.components[Component.name] = component;
 
-    if (this.alive) {
+    if (this._alive) {
       this.world.onComponentAdded(this, Component);
     }
 
@@ -143,7 +166,7 @@ export class Entity {
       const index = this.componentTypes.indexOf(Component);
       this.componentTypes.splice(index, 1);
 
-      if (this.alive) {
+      if (this._alive) {
         this.world.onRemoveComponent(this, Component);
       }
     }
@@ -161,7 +184,7 @@ export class Entity {
           this._componentTypesToRemove.splice(index, 1);
         }
       }
-    } else if (this.alive) {
+    } else if (this._alive) {
       this._componentTypesToRemove.push(Component);
       this._componentsToRemove[componentName] = component;
       this.world.queueComponentRemoval(this, Component);
@@ -171,7 +194,7 @@ export class Entity {
       this._numSystemStateComponents--;
 
       // Check if the entity was a ghost waiting for the last system state component to be removed
-      if (this._numSystemStateComponents === 0 && !this.alive) {
+      if (this._numSystemStateComponents === 0 && !this._alive) {
         this.dispose();
       }
     }
@@ -186,6 +209,7 @@ export class Entity {
     }
   }
 
+  // TODO: Optimize this
   removeAllComponents(immediately) {
     let Components = this.componentTypes;
 
@@ -210,38 +234,22 @@ export class Entity {
   }
 
   dispose(immediately) {
-    if (this.alive) {
-      this.world.onDisposeEntity(this);
+    if (this._alive) {
+      this.removeAllComponents(immediately);
+      this.queries.length = 0;
     }
 
+    this._alive = false;
+
     if (immediately) {
-      this.uuid = generateUUID();
-      this.alive = true;
+      this._id = this.world.nextEntityId++;
 
-      for (let i = 0; i < this.queries.length; i++) {
-        this.queries[i].removeEntity(this);
-      }
-
-      for (const componentName in this.components) {
-        this.components[componentName].dispose();
-        delete this.components[componentName];
-      }
-
-      for (const componentName in this._componentsToRemove) {
-        delete this._componentsToRemove[componentName];
-      }
-
-      this.queries.length = 0;
-      this.componentTypes.length = 0;
-      this._componentTypesToRemove.length = 0;
+      this.world.onEntityDisposed(this);
 
       if (this._pool) {
         this._pool.release(this);
       }
-
-      this.world.onEntityDisposed(this);
     } else {
-      this.alive = false;
       this.world.queueEntityDisposal(this);
     }
   }

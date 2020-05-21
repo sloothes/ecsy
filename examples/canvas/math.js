@@ -28,6 +28,7 @@ export class Vector2 {
 }
 
 export const Vector2Type = createType(
+  "Vector2",
   new Vector2(),
   cloneClonable,
   copyCopyable

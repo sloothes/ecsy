@@ -26,17 +26,29 @@ export const copyCopyable = (src, dest, key) => dest[key].copy(src[key]);
 
 export const cloneClonable = src => src.clone();
 
-export const createType = (defaultValue, clone, copy) => ({
+export const createType = (name, defaultValue, clone, copy) => ({
+  name,
   default: defaultValue,
   clone,
   copy
 });
 
+// TODO: Add names
 export const PropTypes = {
-  Number: { default: 0, clone: cloneValue, copy: copyValue },
-  Boolean: { default: false, clone: cloneValue, copy: copyValue },
-  String: { default: "", clone: cloneValue, copy: copyValue },
-  Object: { default: undefined, clone: cloneValue, copy: copyValue },
-  Array: { default: [], clone: cloneArray, copy: copyArray },
-  JSON: { default: null, clone: cloneJSON, copy: copyJSON }
+  Number: { name: "Number", default: 0, clone: cloneValue, copy: copyValue },
+  Boolean: {
+    name: "Boolean",
+    default: false,
+    clone: cloneValue,
+    copy: copyValue
+  },
+  String: { name: "String", default: "", clone: cloneValue, copy: copyValue },
+  Object: {
+    name: "Object",
+    default: undefined,
+    clone: cloneValue,
+    copy: copyValue
+  },
+  Array: { name: "Array", default: [], clone: cloneArray, copy: copyArray },
+  JSON: { name: "JSON", default: null, clone: cloneJSON, copy: copyJSON },
 };

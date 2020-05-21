@@ -12,7 +12,8 @@ export class World {
     this.entityPool = new ObjectPool(new Entity(this));
 
     this.entities = [];
-    this.entitiesByUUID = {};
+    this.entitiesById = {};
+    this.nextEntityId = 0;
 
     this.entitiesWithComponentsToRemove = [];
     this.entitiesToRemove = [];
@@ -44,6 +45,46 @@ export class World {
       return this;
     }
 
+    const schema = Component.schema;
+
+    if (!schema) {
+      throw new Error(`Component "${Component.name}" has no schema property.`);
+    }
+
+    for (const propName in schema) {
+      const prop = schema[propName];
+
+      if (!prop.type) {
+        throw new Error(
+          `Invalid schema for component "${Component.name}". Missing type for "${propName}" property.`
+        );
+      }
+
+      if (!prop.type.name) {
+        console.warn(
+          `Schema for component "${Component.name}" has property "${propName}" which uses a type with no name.`
+        );
+      }
+
+      if (!prop.type.hasOwnProperty("default")) {
+        throw new Error(
+          `Invalid schema for component "${Component.name}". "${propName}" uses type "${prop.type.name}" with no default value.`
+        );
+      }
+
+      if (!prop.type.clone) {
+        throw new Error(
+          `Invalid schema for component "${Component.name}". "${propName}" uses type "${prop.type.name}" with no clone method.`
+        );
+      }
+
+      if (!prop.type.copy) {
+        throw new Error(
+          `Invalid schema for component "${Component.name}". "${propName}" uses type "${prop.type.name}" with no copy method.`
+        );
+      }
+    }
+
     this.componentTypes[Component.name] = Component;
     this.componentCounts[Component.name] = 0;
 
@@ -73,14 +114,14 @@ export class World {
   }
 
   addEntity(entity) {
-    if (this.entitiesByUUID[entity.uuid]) {
-      console.warn(`Entity ${entity.uuid} already added.`);
+    if (this.entitiesById[entity._id]) {
+      console.warn(`Entity ${entity._id} already added.`);
       return entity;
     }
 
-    this.entitiesByUUID[entity.uuid] = entity;
+    this.entitiesById[entity._id] = entity;
     this.entities.push(entity);
-    entity.alive = true;
+    entity._alive = true;
 
     for (let i = 0; i < entity.componentTypes.length; i++) {
       const Component = entity.componentTypes[i];
@@ -90,8 +131,12 @@ export class World {
     return entity;
   }
 
-  getEntityByUUID(uuid) {
-    return this.entitiesByUUID[uuid];
+  findEntityByName(name) {
+    return this.entities.find(e => e.name === name);
+  }
+
+  getEntitiesByName(name) {
+    return this.entities.filter(e => e.name === name);
   }
 
   createComponent(Component) {
@@ -213,22 +258,12 @@ export class World {
     this.entitiesToRemove.push(entity);
   }
 
-  onDisposeEntity(entity) {
-    for (var queryName in this.queries) {
-      const query = this.queries[queryName];
-
-      if (entity.queries.indexOf(query) !== -1) {
-        query.removeEntity(entity);
-      }
-    }
-  }
-
   onEntityDisposed(entity) {
-    if (!this.entitiesByUUID[entity.uuid]) {
+    if (!this.entitiesById[entity._id]) {
       return;
     }
 
-    delete this.entitiesByUUID[entity.uuid];
+    delete this.entitiesById[entity._id];
 
     const index = this.entities.indexOf(entity);
 

@@ -1,6 +1,7 @@
 // TODO: The default clone and copy can be made faster by
 // generating clone/copy functions at Component registration time
 export class Component {
+  // TODO: displayName?
   constructor(props) {
     const schema = this.constructor.schema;
 
