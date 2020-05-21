@@ -28,6 +28,8 @@ export class Entity {
     this._alive = false;
 
     this._numSystemStateComponents = 0;
+
+    this.isEntity = true;
   }
 
   get alive() {
