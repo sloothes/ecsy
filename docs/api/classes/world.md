@@ -152,18 +152,14 @@ ___
 
 ###  unregisterSystem
 
-▸ **unregisterSystem**<**T**>(`System`: [SystemConstructor](../interfaces/systemconstructor.md)‹T›): *this*
+▸ **unregisterSystem**(`System`: [SystemConstructor](../interfaces/systemconstructor.md)‹any›): *this*
 
 Unregister a system.
-
-**Type parameters:**
-
-▪ **T**: *[System](system.md)*
 
 **Parameters:**
 
 Name | Type | Description |
 ------ | ------ | ------ |
-`System` | [SystemConstructor](../interfaces/systemconstructor.md)‹T› | Type of system to unregister  |
+`System` | [SystemConstructor](../interfaces/systemconstructor.md)‹any› | Type of system to unregister  |
 
 **Returns:** *this*
